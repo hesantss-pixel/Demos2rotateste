@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>2SL Log — Roteirização com Mapa</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<style>
+:root{
+  --bg:#0a0b0f;--s1:#0f1117;--s2:#151823;--s3:#1c2030;
+  --border:#252a3d;--border2:#303652;
+  --orange:#f97316;--orange2:#ea580c;--orange-glow:rgba(249,115,22,0.14);
+  --green:#22c55e;--green-glow:rgba(34,197,94,0.12);
+  --red:#ef4444;--red-glow:rgba(239,68,68,0.14);
+  --yellow:#facc15;
+  --text:#eef0f7;--text2:#8088a3;--text3:#454c68;
+  --sans:'Space Grotesk',sans-serif;--body:'Inter',sans-serif;--mono:'JetBrains Mono',monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+html,body{height:100%;}
+body{background:var(--bg);color:var(--text);font-family:var(--body);min-height:100vh;overflow-x:hidden;}
+body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(circle,rgba(255,255,255,0.025) 1px,transparent 1px);background-size:26px 26px;pointer-events:none;z-index:0;}
+body::after{content:'';position:fixed;top:-250px;left:50%;transform:translateX(-50%);width:900px;height:600px;background:radial-gradient(ellipse,rgba(249,115,22,0.06) 0%,transparent 65%);pointer-events:none;z-index:0;}
+
+#view-home,#view-pick,#view-route{position:relative;z-index:1;min-height:100vh;display:none;}
+#view-home{display:block;}
+
+.header{background:rgba(10,11,15,0.92);border-bottom:1px solid var(--border);backdrop-filter:blur(16px);padding:0 18px;position:sticky;top:0;z-index:100;}
+.header-inner{max-width:560px;margin:0 auto;display:flex;align-items:center;gap:12px;height:64px;}
+.logo-mark{width:40px;height:40px;background:linear-gradient(135deg,var(--orange),var(--orange2));border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 0 18px rgba(249,115,22,0.3);}
+.logo-mark svg{width:22px;height:22px;fill:#000;}
+.logo-text{line-height:1;}
+.logo-name{font-family:var(--sans);font-weight:800;font-size:18px;letter-spacing:0.5px;}
+.logo-name em{color:var(--orange);font-style:normal;}
+.logo-sub{font-size:8.5px;font-weight:600;letter-spacing:2.5px;text-transform:uppercase;color:var(--text3);margin-top:2px;display:block;}
+.header-right{margin-left:auto;display:flex;gap:8px;}
+.pill{display:flex;align-items:center;gap:6px;background:var(--s2);border:1px solid var(--border);border-radius:20px;padding:5px 11px;font-size:11px;font-weight:600;color:var(--text2);}
+.pill-dot{width:6px;height:6px;border-radius:50%;background:var(--green);animation:p 2s infinite;}
+@keyframes p{0%,100%{opacity:1}50%{opacity:0.35}}
+.pill.ai{background:linear-gradient(135deg,rgba(249,115,22,0.12),rgba(234,88,12,0.06));border-color:rgba(249,115,22,0.3);color:var(--orange);}
+.pill.ai .pill-dot{background:var(--orange);}
+
+.content{max-width:560px;margin:0 auto;padding:20px 18px 60px;}
+.banner{background:linear-gradient(135deg,rgba(250,204,21,0.1),rgba(249,115,22,0.06));border:1px solid rgba(250,204,21,0.3);border-radius:14px;padding:16px 18px;margin-bottom:20px;position:relative;overflow:hidden;}
+.banner::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--yellow),var(--orange));}
+.banner-head{display:flex;align-items:center;gap:8px;margin-bottom:10px;}
+.banner-icon{font-size:16px;}
+.banner-title{font-family:var(--sans);font-weight:700;font-size:12px;letter-spacing:1.5px;text-transform:uppercase;color:var(--yellow);}
+.banner-list{display:flex;flex-direction:column;gap:8px;}
+.banner-item{display:flex;align-items:center;gap:10px;background:rgba(0,0,0,0.2);border-radius:8px;padding:9px 12px;}
+.bi-urgent{border-left:3px solid var(--yellow);}
+.bi-nf{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--text);}
+.bi-text{font-size:12px;color:var(--text2);flex:1;}
+.bi-text b{color:var(--yellow);}
+.bi-date{font-size:10px;color:var(--text3);font-family:var(--mono);}
+
+.stats-row{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:24px;}
+.stat{background:var(--s2);border:1px solid var(--border);border-radius:12px;padding:16px;position:relative;overflow:hidden;}
+.stat::after{content:'';position:absolute;bottom:0;left:0;right:0;height:2px;background:var(--ac,var(--orange));opacity:0.5;}
+.stat-val{font-family:var(--sans);font-size:26px;font-weight:800;line-height:1;margin-bottom:4px;}
+.stat-lbl{font-size:9.5px;font-weight:600;letter-spacing:1.8px;text-transform:uppercase;color:var(--text3);}
+
+.sec-title{font-family:var(--sans);font-weight:700;font-size:12px;letter-spacing:2px;text-transform:uppercase;color:var(--text2);margin-bottom:12px;display:flex;align-items:center;gap:10px;}
+.sec-title::after{content:'';flex:1;height:1px;background:var(--border);}
+
+.btn-escolher{width:100%;background:var(--s2);border:2px dashed var(--border2);border-radius:14px;padding:24px;cursor:pointer;transition:all 0.2s;display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center;}
+.btn-escolher:hover{border-color:var(--orange);background:var(--s3);}
+.btn-escolher-icon{font-size:32px;}
+.btn-escolher-title{font-family:var(--sans);font-weight:700;font-size:16px;color:var(--text);}
+.btn-escolher-sub{font-size:12px;color:var(--text3);}
+
+.tipos-list{display:flex;flex-direction:column;gap:10px;animation:expandIn 0.3s ease;}
+@keyframes expandIn{from{opacity:0;transform:translateY(-8px);}to{opacity:1;transform:none;}}
+.tipo-card{background:var(--s2);border:1px solid var(--border);border-radius:14px;padding:16px 18px;cursor:pointer;transition:all 0.2s;display:flex;align-items:center;gap:14px;position:relative;overflow:hidden;}
+.tipo-card:hover{border-color:var(--orange);box-shadow:0 0 20px var(--orange-glow);}
+.tipo-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--vc,var(--orange));opacity:0.6;}
+.tipo-icon{width:48px;height:48px;background:var(--s3);border:1px solid var(--border2);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0;}
+.tipo-info{flex:1;min-width:0;}
+.tipo-name{font-family:var(--sans);font-weight:700;font-size:16px;color:var(--text);margin-bottom:2px;}
+.tipo-desc{font-size:11.5px;color:var(--text2);}
+.tipo-arrow{font-size:18px;color:var(--text3);flex-shrink:0;}
+
+.fleet-header{background:var(--s1);border-bottom:1px solid var(--border);padding:0 18px;position:sticky;top:0;z-index:100;}
+.fleet-header-inner{max-width:560px;margin:0 auto;display:flex;align-items:center;gap:12px;height:64px;}
+.btn-back{background:var(--s3);border:1px solid var(--border2);border-radius:8px;padding:8px 14px;font-family:var(--body);font-weight:600;font-size:12px;color:var(--text2);cursor:pointer;display:flex;align-items:center;gap:6px;flex-shrink:0;}
+.fleet-content{max-width:560px;margin:0 auto;padding:28px 18px 60px;}
+
+.cap-card{background:var(--s2);border:1px solid var(--border);border-radius:16px;padding:26px 24px;text-align:center;}
+.cap-icon{width:64px;height:64px;background:var(--s3);border:1px solid var(--border2);border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:32px;margin:0 auto 16px;}
+.cap-name{font-family:var(--sans);font-weight:800;font-size:22px;margin-bottom:4px;}
+.cap-desc{font-size:12.5px;color:var(--text3);margin-bottom:22px;}
+.cap-field-label{display:block;font-size:10px;font-weight:700;letter-spacing:1.8px;text-transform:uppercase;color:var(--text3);margin-bottom:8px;text-align:left;}
+.cap-input-wrap{display:flex;align-items:center;background:var(--s3);border:1px solid var(--border2);border-radius:12px;padding:4px;margin-bottom:18px;transition:border-color 0.2s;}
+.cap-input-wrap:focus-within{border-color:var(--orange);box-shadow:0 0 0 3px var(--orange-glow);}
+.cap-input{flex:1;background:none;border:none;outline:none;padding:14px 16px;font-family:var(--sans);font-size:22px;font-weight:700;color:var(--orange);text-align:center;-webkit-appearance:none;}
+.cap-unit{font-family:var(--sans);font-weight:700;font-size:14px;color:var(--text3);padding-right:16px;}
+.cap-presets{display:flex;gap:8px;margin-bottom:22px;flex-wrap:wrap;justify-content:center;}
+.preset-btn{background:var(--s3);border:1px solid var(--border2);border-radius:20px;padding:7px 14px;font-size:12px;font-weight:600;color:var(--text2);cursor:pointer;transition:all 0.15s;}
+.preset-btn:hover,.preset-btn.active{background:rgba(249,115,22,0.12);border-color:var(--orange);color:var(--orange);}
+.btn-confirm{width:100%;background:linear-gradient(135deg,var(--orange),var(--orange2));border:none;border-radius:10px;padding:16px;font-family:var(--sans);font-weight:700;font-size:16px;letter-spacing:1px;text-transform:uppercase;color:#000;cursor:pointer;transition:all 0.15s;box-shadow:0 4px 20px rgba(249,115,22,0.25);}
+.btn-confirm:active{transform:scale(0.98);}
+.btn-confirm:disabled{opacity:0.4;cursor:not-allowed;}
+
+.confirm-summary{background:var(--s2);border:1px solid var(--border);border-radius:16px;padding:24px;}
+.cs-head{display:flex;align-items:center;gap:14px;margin-bottom:20px;padding-bottom:18px;border-bottom:1px solid var(--border);}
+.cs-icon{width:52px;height:52px;background:var(--s3);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:26px;flex-shrink:0;}
+.cs-name{font-family:var(--sans);font-weight:800;font-size:19px;}
+.cs-sub{font-size:11px;color:var(--text3);margin-top:1px;}
+.cs-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;}
+.cs-label{font-size:13px;color:var(--text2);}
+.cs-value{font-family:var(--mono);font-weight:600;font-size:14px;color:var(--text);}
+.cs-value.highlight{color:var(--orange);font-size:16px;}
+
+.loading-state{display:none;text-align:center;padding:60px 20px;}
+.loading-state.show{display:block;}
+.loading-spinner{width:56px;height:56px;border:3px solid var(--border2);border-top-color:var(--orange);border-radius:50%;animation:spin 0.9s linear infinite;margin:0 auto 24px;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.loading-text{font-family:var(--sans);font-weight:700;font-size:16px;color:var(--text);margin-bottom:8px;}
+.loading-sub{font-size:13px;color:var(--text3);font-family:var(--mono);}
+
+.map-container{width:100%;height:300px;border:1px solid var(--border);border-radius:14px;margin-bottom:20px;overflow:hidden;}
+.route-summary{background:var(--s2);border:1px solid var(--border);border-radius:16px;padding:22px;margin-bottom:20px;position:relative;overflow:hidden;}
+.route-summary::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--orange),var(--green));}
+.rs-vehicle{display:flex;align-items:center;gap:12px;margin-bottom:18px;}
+.rs-icon{width:44px;height:44px;background:var(--s3);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:22px;}
+.rs-name{font-family:var(--sans);font-weight:700;font-size:17px;}
+.rs-cap{font-size:11px;color:var(--text3);}
+.rs-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
+.rs-item{text-align:center;background:var(--s3);border-radius:10px;padding:12px 6px;}
+.rs-val{font-family:var(--sans);font-weight:800;font-size:20px;color:var(--orange);line-height:1;margin-bottom:3px;}
+.rs-lbl{font-size:9px;font-weight:600;letter-spacing:1.2px;text-transform:uppercase;color:var(--text3);}
+
+.delivery-list{display:flex;flex-direction:column;gap:8px;}
+.delivery-item{background:var(--s2);border:1px solid var(--border);border-radius:12px;padding:14px 16px;display:flex;align-items:center;gap:12px;animation:slideIn 0.3s ease backwards;}
+@keyframes slideIn{from{opacity:0;transform:translateX(-12px);}to{opacity:1;transform:none;}}
+.di-num{width:30px;height:30px;background:linear-gradient(135deg,var(--orange),var(--orange2));border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:var(--sans);font-weight:800;font-size:13px;color:#000;flex-shrink:0;}
+.di-info{flex:1;min-width:0;}
+.di-nf{font-family:var(--mono);font-size:14px;font-weight:600;color:var(--text);}
+.di-addr{font-size:11.5px;color:var(--text3);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.di-meta{text-align:right;flex-shrink:0;}
+.di-peso{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--orange);}
+.di-itens{font-size:10px;color:var(--text3);}
+
+.btn-novo{width:100%;margin-top:20px;background:var(--s3);border:1px solid var(--border2);border-radius:10px;padding:14px;font-family:var(--sans);font-weight:700;font-size:13px;letter-spacing:1px;text-transform:uppercase;color:var(--text2);cursor:pointer;transition:all 0.15s;}
+.btn-novo:hover{color:var(--text);border-color:var(--text3);}
+
+.leaflet-container{background:var(--s3) !important;}
+.leaflet-control-attribution{background:var(--s2) !important;border:1px solid var(--border) !important;}
+.leaflet-control-zoom{border:1px solid var(--border) !important;}
+.leaflet-control-zoom a{background:var(--s2) !important;color:var(--text) !important;border-bottom:1px solid var(--border) !important;}
+</style>
+</head>
+<body>
+
+<!-- ═══ HOME ═══ -->
+<div id="view-home">
+  <div class="header">
+    <div class="header-inner">
+      <div class="logo-mark">
+        <svg viewBox="0 0 24 24"><rect x="1" y="4" width="13" height="12" rx="1"/><path d="M14 8h4l3 3.5V16h-7V8z"/><circle cx="5.5" cy="17.5" r="2.5"/><circle cx="18.5" cy="17.5" r="2.5"/></svg>
+      </div>
+      <div class="logo-text">
+        <div class="logo-name">2SL <em>LOG</em></div>
+        <span class="logo-sub">Roteirização Inteligente</span>
+      </div>
+      <div class="header-right">
+        <div class="pill"><div class="pill-dot"></div><span id="hdr-pedidos">378</span> pedidos</div>
+        <div class="pill ai"><div class="pill-dot"></div>IA Ativa</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="content">
+
+    <div class="banner">
+      <div class="banner-head">
+        <span class="banner-icon">📅</span>
+        <span class="banner-title">Pedidos Agendados</span>
+      </div>
+      <div class="banner-list">
+        <div class="banner-item bi-urgent">
+          <span class="bi-nf">NF 47473</span>
+          <span class="bi-text">Precisa sair <b>amanhã</b> — entrega programada</span>
+          <span class="bi-date">19/06</span>
+        </div>
+        <div class="banner-item">
+          <span class="bi-nf">NF 52910</span>
+          <span class="bi-text">Entrega programada</span>
+          <span class="bi-date">22/06</span>
+        </div>
+        <div class="banner-item">
+          <span class="bi-nf">NF 61204</span>
+          <span class="bi-text">Entrega programada</span>
+          <span class="bi-date">25/06</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="stats-row" style="grid-template-columns:1fr;">
+      <div class="stat" style="--ac:var(--orange)"><div class="stat-val" style="color:var(--orange)">378</div><div class="stat-lbl">Pedidos Disponíveis</div></div>
+    </div>
+
+    <div class="sec-title">Roteirização</div>
+    <div id="escolher-wrap">
+      <button class="btn-escolher" onclick="abrirTipos()">
+        <span class="btn-escolher-icon">🚚</span>
+        <span class="btn-escolher-title">Escolher Veículo</span>
+        <span class="btn-escolher-sub">Selecione o tipo para gerar a rota ideal</span>
+      </button>
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══ ESCOLHER TIPO + CAPACIDADE ═══ -->
+<div id="view-pick">
+  <div class="fleet-header">
+    <div class="fleet-header-inner">
+      <button class="btn-back" id="pick-back" onclick="voltarHome()">← Voltar</button>
+    </div>
+  </div>
+  <div class="fleet-content">
+
+    <div id="step-tipos">
+      <div class="sec-title">Selecione o Tipo de Veículo</div>
+      <div class="tipos-list" id="tipos-list"></div>
+    </div>
+
+    <div id="step-capacidade" style="display:none;">
+      <div class="cap-card">
+        <div class="cap-icon" id="cap-icon">🚐</div>
+        <div class="cap-name" id="cap-name">Fiorino</div>
+        <div class="cap-desc" id="cap-desc">Informe a capacidade desta unidade específica</div>
+        <span class="cap-field-label">Capacidade Máxima</span>
+        <div class="cap-input-wrap">
+          <input type="number" class="cap-input" id="cap-input" placeholder="0" inputmode="numeric">
+          <span class="cap-unit">KG</span>
+        </div>
+        <div class="cap-presets" id="cap-presets"></div>
+        <span class="cap-field-label">Máx. Pedidos por Rota</span>
+        <div class="cap-input-wrap" style="margin-bottom:18px;">
+          <input type="number" class="cap-input" id="max-pedidos-input" placeholder="6" inputmode="numeric" value="6" min="1" max="20">
+          <span class="cap-unit">NFs</span>
+        </div>
+        <button class="btn-confirm" onclick="irParaConfirmacao()">Continuar →</button>
+      </div>
+    </div>
+
+    <div id="step-confirmacao" style="display:none;">
+      <div class="sec-title">Confirmar Geração de Rota</div>
+      <div class="confirm-summary">
+        <div class="cs-head">
+          <div class="cs-icon" id="cs-icon">🚐</div>
+          <div>
+            <div class="cs-name" id="cs-name">Fiorino</div>
+            <div class="cs-sub">Veículo selecionado</div>
+          </div>
+        </div>
+        <div class="cs-row"><span class="cs-label">Capacidade máxima</span><span class="cs-value highlight" id="cs-cap">2.000 kg</span></div>
+        <div class="cs-row"><span class="cs-label">Pedidos disponiveis</span><span class="cs-value">378</span></div>
+        <div class="cs-row"><span class="cs-label">Máx. pedidos por rota</span><span class="cs-value" id="cs-maxped">6 pedidos (máx.)</span></div>
+      </div>
+      <button class="btn-confirm" style="margin-top:18px;" onclick="confirmarGeracao()">✔ Gerar Rota</button>
+    </div>
+
+    <div class="loading-state" id="loading-state">
+      <div class="loading-spinner"></div>
+      <div class="loading-text">Montando a rota ideal...</div>
+      <div class="loading-sub" id="loading-sub">Analisando 378 pedidos</div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══ ROTA COM MAPA ═══ -->
+<div id="view-route">
+  <div class="fleet-header">
+    <div class="fleet-header-inner">
+      <button class="btn-back" onclick="voltarHome()">← Voltar</button>
+    </div>
+  </div>
+  <div class="fleet-content" id="route-content"></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+const TIPOS = [
+  {id:'fiorino', nome:'Fiorino', icone:'🚐', desc:'Furgão leve — entregas urbanas curtas', presets:[500,800,1200], cor:'#8b5cf6'},
+  {id:'vuc', nome:'VUC', icone:'🚐', desc:'Veículo Urbano de Carga — restrição de horário', presets:[1500,2000,3000], cor:'#06b6d4'},
+  {id:'toco', nome:'Truck Toco', icone:'🚛', desc:'2 eixos — médias distâncias', presets:[4000,6000,8000], cor:'#3b82f6'},
+  {id:'bitruck', nome:'Truck Bitruck', icone:'🚛', desc:'3 eixos — cargas pesadas', presets:[10000,12000,16000], cor:'#f97316'},
+  {id:'carreta', nome:'Carreta', icone:'🚛', desc:'Articulada — grandes volumes', presets:[20000,27000,32000], cor:'#ef4444'},
+];
+
+// Endereços reais de Guarulhos com coordenadas
+const ENDERECOS = [
+  {end:'Rua das Flores, 234 - Jd Santa Mena', lat:-23.4516, lng:-46.4892},
+  {end:'Av. Tiradentes, 1890 - Vila Galvão', lat:-23.4592, lng:-46.5010},
+  {end:'Rua Ibitirama, 567 - Vila Prudente', lat:-23.4745, lng:-46.5820},
+  {end:'Av. Aricanduva, 3200 - Aricanduva', lat:-23.4620, lng:-46.5450},
+  {end:'Rua do Carmo, 45 - Centro', lat:-23.4641, lng:-46.5091},
+  {end:'Av. Brasil, 1020 - Gopouva', lat:-23.4450, lng:-46.5150},
+  {end:'Rua Padre Adelino, 800 - Vila Galvão', lat:-23.4580, lng:-46.5020},
+  {end:'Av. Celso Garcia, 2300 - Vila Galvão', lat:-23.4510, lng:-46.4950},
+  {end:'Rua Bresser, 910 - Jd Marisa', lat:-23.4730, lng:-46.5300},
+  {end:'Av. Radial Leste, 700 - Jd Marisa', lat:-23.4680, lng:-46.5250},
+  {end:'Rua Coronel Afonso, 500 - Jd São João', lat:-23.4620, lng:-46.5180},
+  {end:'Av. Emílio Ribas, 2100 - Jd Peri', lat:-23.4550, lng:-46.5220},
+  {end:'Rua 13 de Maio, 350 - Vila Galvão', lat:-23.4570, lng:-46.5030},
+  {end:'Av. São João, 450 - Vila Vermelha', lat:-23.4490, lng:-46.5140},
+  {end:'Rua Dom Pedro II, 670 - Jd Tranquilidade', lat:-23.4710, lng:-46.5380},
+];
+
+let tipoSelecionado = null;
+let capacidadeFinal = 0;
+let mapInstance = null;
+
+function gerarPedidosAleatorios(qtd, maxPeso){
+  const arr = [];
+  for(let i=0;i<qtd;i++){
+    const peso = 30 + Math.floor(Math.random()*Math.min(450, maxPeso));
+    const endIdx = Math.floor(Math.random()*ENDERECOS.length);
+    arr.push({
+      nf: String(300000 + Math.floor(Math.random()*699999)),
+      end: ENDERECOS[endIdx].end,
+      lat: ENDERECOS[endIdx].lat,
+      lng: ENDERECOS[endIdx].lng,
+      peso,
+      itens: 2 + Math.floor(Math.random()*40)
+    });
+  }
+  return arr;
+}
+
+function abrirTipos(){
+  document.getElementById('tipos-list').innerHTML = TIPOS.map(t => `
+    <div class="tipo-card" style="--vc:${t.cor}" onclick="selecionarTipo('${t.id}')">
+      <div class="tipo-icon">${t.icone}</div>
+      <div class="tipo-info">
+        <div class="tipo-name">${t.nome}</div>
+        <div class="tipo-desc">${t.desc}</div>
+      </div>
+      <div class="tipo-arrow">→</div>
+    </div>
+  `).join('');
+
+  document.getElementById('step-tipos').style.display = 'block';
+  document.getElementById('step-capacidade').style.display = 'none';
+  document.getElementById('step-confirmacao').style.display = 'none';
+  document.getElementById('loading-state').classList.remove('show');
+  document.getElementById('view-home').style.display = 'none';
+  document.getElementById('view-pick').style.display = 'block';
+  window.scrollTo(0,0);
+}
+
+function selecionarTipo(id){
+  tipoSelecionado = TIPOS.find(t => t.id === id);
+  document.getElementById('cap-icon').textContent = tipoSelecionado.icone;
+  document.getElementById('cap-name').textContent = tipoSelecionado.nome;
+  document.getElementById('cap-input').value = '';
+  document.getElementById('cap-presets').innerHTML = tipoSelecionado.presets.map(p => `
+    <button class="preset-btn" onclick="aplicarPreset(${p}, this)">${p.toLocaleString('pt-BR')} kg</button>
+  `).join('');
+
+  document.getElementById('step-tipos').style.display = 'none';
+  document.getElementById('step-capacidade').style.display = 'block';
+  document.getElementById('pick-back').onclick = abrirTipos;
+  window.scrollTo(0,0);
+}
+
+function aplicarPreset(val, btn){
+  document.getElementById('cap-input').value = val;
+  document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+let maxPedidosFinal = 6;
+
+function irParaConfirmacao(){
+  const cap = parseInt(document.getElementById('cap-input').value);
+  const maxP = parseInt(document.getElementById('max-pedidos-input').value) || 6;
+  if(!cap || cap <= 0) return;
+  capacidadeFinal = cap;
+  maxPedidosFinal = maxP;
+
+  document.getElementById('cs-icon').textContent = tipoSelecionado.icone;
+  document.getElementById('cs-name').textContent = tipoSelecionado.nome;
+  document.getElementById('cs-cap').textContent = cap.toLocaleString('pt-BR') + ' kg';
+  document.getElementById('cs-maxped').textContent = maxP + ' pedidos (máx.)';
+
+  document.getElementById('step-capacidade').style.display = 'none';
+  document.getElementById('step-confirmacao').style.display = 'block';
+  document.getElementById('pick-back').onclick = () => selecionarTipo(tipoSelecionado.id);
+  window.scrollTo(0,0);
+}
+
+function confirmarGeracao(){
+  document.getElementById('step-confirmacao').style.display = 'none';
+  document.getElementById('loading-state').classList.add('show');
+
+  const subTexts = ['Analisando 378 pedidos','Filtrando por peso compatível','Otimizando ordem de entrega','Montando rota final'];
+  let i = 0;
+  const sub = document.getElementById('loading-sub');
+  const interval = setInterval(() => {
+    i++;
+    if(i < subTexts.length) sub.textContent = subTexts[i];
+  }, 500);
+
+  setTimeout(() => {
+    clearInterval(interval);
+    gerarRota();
+  }, 2200);
+}
+
+function calcularDistancia(lat1, lon1, lat2, lon2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+            Math.sin(dLon/2) * Math.sin(dLon/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R * c;
+}
+
+function otimizarRota(pedidos, origem) {
+  // Algoritmo de vizinho mais próximo para ordenar pedidos geograficamente
+  let rotaOtimizada = [];
+  let disponiveis = [...pedidos];
+  let pontoAtual = origem;
+
+  while(disponiveis.length > 0) {
+    let maisProximo = 0;
+    let menorDist = Infinity;
+    
+    for(let i = 0; i < disponiveis.length; i++) {
+      const dist = calcularDistancia(pontoAtual.lat, pontoAtual.lng, disponiveis[i].lat, disponiveis[i].lng);
+      if(dist < menorDist) {
+        menorDist = dist;
+        maisProximo = i;
+      }
+    }
+    
+    rotaOtimizada.push(disponiveis[maisProximo]);
+    pontoAtual = disponiveis[maisProximo];
+    disponiveis.splice(maisProximo, 1);
+  }
+  
+  return rotaOtimizada;
+}
+
+function gerarLinkWaze(pedidos, origem) {
+  // Gera URL do Waze com todos os waypoints
+  let url = `https://www.waze.com/en/live-map/directions?navigate=yes`;
+  url += `&from=${origem.lat.toFixed(4)},${origem.lng.toFixed(4)}`;
+  url += `&to=${pedidos[pedidos.length-1].lat.toFixed(4)},${pedidos[pedidos.length-1].lng.toFixed(4)}`;
+  
+  // Adiciona waypoints intermediários
+  for(let i = 0; i < pedidos.length - 1; i++) {
+    url += `&waypoint=${pedidos[i].lat.toFixed(4)},${pedidos[i].lng.toFixed(4)}`;
+  }
+  
+  return url;
+}
+
+function gerarRota(){
+  const cap = capacidadeFinal;
+  const targetPeso = Math.floor(cap * (0.7 + Math.random()*0.2));
+  let pedidos = [];
+  let pesoAcum = 0;
+  let tentativas = 0;
+  const maxPedidos = maxPedidosFinal;
+
+  while(pesoAcum < targetPeso && pedidos.length < maxPedidos && tentativas < 100){
+    const p = gerarPedidosAleatorios(1, cap - pesoAcum)[0];
+    if(pesoAcum + p.peso <= cap){
+      pedidos.push(p);
+      pesoAcum += p.peso;
+    }
+    tentativas++;
+  }
+
+  // ✨ OTIMIZAR ROTA POR PROXIMIDADE
+  const origem = {lat:-23.4566, lng:-46.5055};
+  pedidos = otimizarRota(pedidos, origem);
+
+  const pesoTotal = pedidos.reduce((a,p)=>a+p.peso,0);
+  const itensTotal = pedidos.reduce((a,p)=>a+p.itens,0);
+
+  // Calcular distância total com rota otimizada
+  let distTotal = 0;
+  for(let i=0;i<pedidos.length;i++){
+    const atual = pedidos[i];
+    const prox = pedidos[(i+1) % pedidos.length];
+    distTotal += calcularDistancia(atual.lat, atual.lng, prox.lat, prox.lng);
+  }
+  distTotal += calcularDistancia(origem.lat, origem.lng, pedidos[0].lat, pedidos[0].lng);
+
+  const tempoEstimado = Math.ceil(distTotal / 40 + pedidos.length * 15);
+  
+  // ✨ LINK DO WAZE
+  const wazeLink = gerarLinkWaze(pedidos, origem);
+
+  let html = `
+    <div class="map-container" id="map"></div>
+
+    <div class="route-summary">
+      <div class="rs-vehicle">
+        <div class="rs-icon">${tipoSelecionado.icone}</div>
+        <div>
+          <div class="rs-name">${tipoSelecionado.nome}</div>
+          <div class="rs-cap">Capacidade: ${cap.toLocaleString('pt-BR')} kg</div>
+        </div>
+      </div>
+      <div class="rs-grid">
+        <div class="rs-item"><div class="rs-val">${pedidos.length}</div><div class="rs-lbl">Entregas</div></div>
+        <div class="rs-item"><div class="rs-val">${distTotal.toFixed(1)}</div><div class="rs-lbl">KM Total</div></div>
+        <div class="rs-item"><div class="rs-val">${tempoEstimado}</div><div class="rs-lbl">MIN Est.</div></div>
+      </div>
+      <div style="margin-top:16px;display:flex;gap:10px;font-size:12px;color:var(--text3);">
+        <span>📦 ${pesoTotal.toLocaleString('pt-BR')} kg</span>
+        <span>📄 ${itensTotal} itens</span>
+      </div>
+    </div>
+
+    <a href="${wazeLink}" target="_blank" style="display:block;margin-bottom:20px;">
+      <button class="btn-confirm" style="width:100%;background:linear-gradient(135deg,#236ccc,#1d4faa);box-shadow:0 4px 20px rgba(35,108,204,0.25);">
+        🗺️ Abrir Rota no Waze
+      </button>
+    </a>
+
+    <div class="sec-title">Sequência Otimizada de Entrega</div>
+    <div class="delivery-list">
+  `;
+
+  pedidos.forEach((p, idx) => {
+    html += `
+      <div class="delivery-item" style="animation-delay:${idx*0.04}s">
+        <div class="di-num">${idx+1}</div>
+        <div class="di-info">
+          <div class="di-nf">NF ${p.nf}</div>
+          <div class="di-addr">${p.end}</div>
+        </div>
+        <div class="di-meta">
+          <div class="di-peso">${p.peso} kg</div>
+          <div class="di-itens">${p.itens} itens</div>
+        </div>
+      </div>
+    `;
+  });
+
+  html += `
+    </div>
+    <button class="btn-novo" onclick="voltarHome()">↻ Gerar Nova Rota</button>
+  `;
+
+  document.getElementById('route-content').innerHTML = html;
+  document.getElementById('view-pick').style.display = 'none';
+  document.getElementById('view-route').style.display = 'block';
+  window.scrollTo(0,0);
+
+  // Inicializar mapa após renderizar
+  setTimeout(() => inicializarMapa(pedidos, origem), 100);
+}
+
+function inicializarMapa(pedidos, origem){
+  if(mapInstance) mapInstance.remove();
+
+  const bounds = [[origem.lat, origem.lng]];
+  pedidos.forEach(p => bounds.push([p.lat, p.lng]));
+
+  mapInstance = L.map('map', {zoomControl:true}).setView([-23.4566, -46.5055], 13);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {attribution:''}).addTo(mapInstance);
+
+  // Origem
+  const originMarker = L.circleMarker([origem.lat, origem.lng], {radius:10, fillColor:'#22c55e', color:'#fff', weight:2}).addTo(mapInstance);
+  const originLabel = L.divIcon({className:'numero-entrega', html:'<div style="background:#22c55e;color:#fff;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;border:2px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.3)">S</div>'});
+  L.marker([origem.lat, origem.lng], {icon:originLabel}).addTo(mapInstance).bindPopup('Saída/Origem');
+
+  // Pontos de entrega
+  pedidos.forEach((p, idx) => {
+    const circleMarker = L.circleMarker([p.lat, p.lng], {radius:10, fillColor:'#f97316', color:'#fff', weight:2}).addTo(mapInstance);
+    const numLabel = L.divIcon({className:'numero-entrega', html:`<div style="background:#f97316;color:#000;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:16px;border:2px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.3)">${idx+1}</div>`});
+    L.marker([p.lat, p.lng], {icon:numLabel}).addTo(mapInstance).bindPopup(`<b>Entrega ${idx+1}</b><br/>NF ${p.nf}<br/>${p.peso}kg`);
+  });
+
+  // Linha de rota
+  const latlngs = [[origem.lat, origem.lng], ...pedidos.map(p => [p.lat, p.lng]), [origem.lat, origem.lng]];
+  L.polyline(latlngs, {color:'#f97316', weight:2, opacity:0.6, dashArray:'5,5'}).addTo(mapInstance);
+
+  mapInstance.fitBounds(bounds, {padding:[40,40]});
+}
+
+function voltarHome(){
+  document.getElementById('view-pick').style.display = 'none';
+  document.getElementById('view-route').style.display = 'none';
+  document.getElementById('view-home').style.display = 'block';
+  if(mapInstance) mapInstance.remove();
+  window.scrollTo(0,0);
+}
+</script>
+</body>
+</html>
